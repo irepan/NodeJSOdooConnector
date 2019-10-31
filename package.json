@@ -1,0 +1,15 @@
+{
+  "name": "odooconnector",
+  "version": "1.0.0",
+  "description": "Library to connect to odoo using odoo API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://git.waydata.dev/bizbox/nodejsodooconnector.git"
+  },
+  "author": "Irepan Chavez",
+  "license": "ISC"
+}
