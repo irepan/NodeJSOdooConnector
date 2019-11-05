@@ -1,7 +1,9 @@
+import Odoo from './src/controllers/Odoo';
 const HelloWorld = () => {
-  return "Hello World";
+	return 'Hello World';
 };
 
 module.exports = {
-  HelloWorld
+	HelloWorld,
+	init: Odoo.init
 };
