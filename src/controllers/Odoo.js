@@ -1,56 +1,69 @@
-import OdooRpc from 'odoo-xmlrpc';
-import Helper from '../helpers/Helper';
+const OdooRpc = require('odoo-xmlrpc');
+const Helper = require('../helpers/Helper');
 
-/*
-new OdooRpc({
-  url: process.env.ODOO_URL,
-  db: process.env.ODOO_DB,
-  username: "",
-  password: "",
-  port: ""
-});
-*/
+const errorRegex = /.*odoo\.exceptions\.([^\:]*)\:.*'([^']*)'.*/g;
+
+const matchException = /.*odoo\.exceptions\..*\:.*\('[^']*'.*\)/g;
+
+const stripError = text => {
+	var decoded = text.match(matchException).toString();
+	console.log(decoded.replace(errorRegex, '$2'));
+	return decoded ? decoded : 'Unknown Error';
+};
 
 class OdooSingleton {
-	odoo = null;
-	valid = false;
-	odooParams = {};
-	tokenGenerator;
 	constructor() {
-		this.AuthController = AuthController;
-		this.tokenGenerator = this.tokenGenerator.bind(this);
+		this.odoo = null;
+		this.valid = false;
+		this.odooParams = {};
+		this.init = this.init.bind(this);
+		this.getOdooConnector = this.getOdooConnector.bind(this);
+		this.execute_kw = this.execute_kw.bind(this);
 	}
 
-	init = async ({
+	async init({
 		url,
 		db,
 		username,
 		password,
 		port,
 		tokenGenerator = Helper.generateToken
-	}) =>
-		new Promise(function(resolve, reject) {
-			if (!url || !db || !username || !password) {
-				reject('Need valid values to initialize');
-				return;
-			}
-			const odoo = new OdooRpc({ url, db, username, password, port });
-			odoo.connect(err => {
-				if (err) {
-					this.valid = false;
-					this.odoo = null;
-					this.odooParams = {};
-					reject('Invalid initializarion parameters');
+	}) {
+		try {
+			this.odoo = await new Promise(function(resolve, reject) {
+				if (!url || !db || !username || !password) {
+					reject('Need valid values to initialize');
 					return;
 				}
-				this.valid = true;
-				this.odoo = odoo;
-				odooParams = { url, db, username, password, port };
-				resolve('OK');
-			});
-		});
-	execute_kw = (model, method, params) =>
-		new Promise((resolve, reject) => {
+				const odoo = new OdooRpc({ url, db, username, password, port });
+				odoo.connect(err => {
+					if (err) {
+						reject(err.message);
+						return;
+					}
+					resolve(odoo);
+				});
+			})
+				.then(odoo => {
+					return odoo;
+				})
+				.catch(err => {
+					throw err;
+				});
+		} catch (err) {
+			this.valid = false;
+			this.odoo = null;
+			this.odooParams = {};
+			throw { error: err };
+		}
+		this.valid = true;
+		this.odooParams = { url, db, username, password, port };
+		this.tokenGenerator = tokenGenerator;
+		return { status: 'OK' };
+	}
+
+	execute_kw(model, method, params) {
+		return new Promise((resolve, reject) => {
 			if (!this.valid) {
 				reject('Odoo needs to be initialized using init method');
 				return;
@@ -63,6 +76,10 @@ class OdooSingleton {
 				}
 				this.odoo.execute_kw(model, method, params, (error, value) => {
 					if (error) {
+						if (error.faultString) {
+							reject(stripError(error.faultString));
+							return;
+						}
 						reject(error);
 						return;
 					}
@@ -70,14 +87,14 @@ class OdooSingleton {
 				});
 			});
 		});
-
-	getOdooConnector = ({ email: username, password }) => {
+	}
+	getOdooConnector({ email: username, password }) {
 		if (!this.valid) {
 			throw 'Odoo needs to be initialized using init method';
 		}
-		const { url, db, port } = this.odoo;
+		const { url, db, port } = this.odooParams;
 		return new OdooRpc({ url, db, username, password, port });
-	};
+	}
 }
 var Singleton = (function() {
 	var instance;
@@ -98,4 +115,4 @@ var Singleton = (function() {
 })();
 const Odoo = Singleton.getInstance();
 
-export default Odoo;
+module.exports = Odoo;

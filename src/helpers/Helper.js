@@ -1,6 +1,6 @@
-import JWT from 'jsonwebtoken';
-import UIDGenerator from 'uid-generator';
-import sgMail from '@sendgrid/mail';
+const JWT = require('jsonwebtoken');
+const UIDGenerator = require('uid-generator');
+const sgMail = require('@sendgrid/mail');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const SECRET_KEY = process.env.SECRET_KEY;
