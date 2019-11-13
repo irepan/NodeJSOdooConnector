@@ -206,7 +206,8 @@ const generatePasswordResetToken = function(email) {
 			const params = [];
 			const token = {
 				token: Helper.generateUID(),
-				mail: email
+				mail: email,
+				expires: Date.now() + (1000 * 60 * 60) // 1 hr
 			};
 			params.push(token);
 			await Odoo.execute_kw('res.users.tokens', 'create', [params])
@@ -222,10 +223,56 @@ const generatePasswordResetToken = function(email) {
 	});
 };
 
+const retrieveResetToken = function(token) {
+	return new Promise((resolve, reject) => {
+		const params = [];
+		params.push([['token', '=', token]]);
+		params.push(['id','token','mail','expires']);
+		params.push(0);
+		params.push(10);
+		await Odoo.execute_kw('res.users.tokens', 'search_read', [params])
+			.then(results => {
+				if (results.length<1){
+					reject('Token does not exist');
+					return;
+				}
+				const token = results[0];
+				if (token.expires < Date.now()){
+					reject('Token already expired');
+				} 
+				resolve(token);
+				return token;
+			})
+			.catch(error => {
+				reject(error);
+			})
+	});
+};
+
+const validatePasswordResetToken = function (token) {
+	return new Promise((resolve, reject) => {
+		retrieveResetToken(token)
+			.then(result => {
+				findUserByEmail(result.mail)
+					.then(user => {
+						resolve(user);
+						return user;
+					})
+					.catch(error => {
+						reject(error);
+					})
+			})
+			.catch(error => {
+				reject(error);
+			})
+	});
+};
+
 module.exports = {
 	loginUser,
 	createUser,
 	findUserById,
 	findUserByEmail,
-	generatePasswordResetToken
+	generatePasswordResetToken,
+	validatePasswordResetToken
 };
