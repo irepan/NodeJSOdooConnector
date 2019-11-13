@@ -7,8 +7,12 @@ const matchException = /.*odoo\.exceptions\..*\:.*\('[^']*'.*\)/g;
 
 const stripError = text => {
 	var decoded = text.match(matchException).toString();
-	console.log(decoded.replace(errorRegex, '$2'));
-	return decoded ? decoded : 'Unknown Error';
+	if (!decoded || decoded.trim().length === 0) {
+		return { type: 'Unknown', message: 'Unknown Exception' };
+	}
+	var exception = decoded.replace(errorRegex, '$1').toString();
+	var message = decoded.replace(errorRegex, '$2').toString();
+	return { type: exception, message: message };
 };
 
 class OdooSingleton {
@@ -62,14 +66,14 @@ class OdooSingleton {
 		return { status: 'OK' };
 	}
 
-	execute_kw(model, method, params) {
+	execute_kw(model, method, params, db) {
 		return new Promise((resolve, reject) => {
 			if (!this.valid) {
 				reject('Odoo needs to be initialized using init method');
 				return;
 			}
-
-			this.odoo.connect(err => {
+			const odoo = db || this.odoo;
+			odoo.connect(err => {
 				if (err) {
 					reject('Unable to connect to odoo instance');
 					return;
@@ -77,7 +81,8 @@ class OdooSingleton {
 				this.odoo.execute_kw(model, method, params, (error, value) => {
 					if (error) {
 						if (error.faultString) {
-							reject(stripError(error.faultString));
+							const { message } = stripError(error.faultString);
+							reject(message);
 							return;
 						}
 						reject(error);
