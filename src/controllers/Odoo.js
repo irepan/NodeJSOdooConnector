@@ -6,12 +6,15 @@ const errorRegex = /.*odoo\.exceptions\.([^\:]*)\:.*'([^']*)'.*/g;
 const matchException = /.*odoo\.exceptions\..*\:.*\('[^']*'.*\)/g;
 
 const stripError = text => {
-	var decoded = text.match(matchException).toString();
-	if (!decoded || decoded.trim().length === 0) {
+	var decoded = text.match(matchException);
+	if (!decoded) {
+		return { type: 'Exception', message: text };
+	}
+	if (decoded.length === 0) {
 		return { type: 'Unknown', message: 'Unknown Exception' };
 	}
-	var exception = decoded.replace(errorRegex, '$1').toString();
-	var message = decoded.replace(errorRegex, '$2').toString();
+	var exception = decoded[0].replace(errorRegex, '$1').toString();
+	var message = decoded[0].replace(errorRegex, '$2').toString();
 	return { type: exception, message: message };
 };
 
@@ -82,9 +85,11 @@ class OdooSingleton {
 					if (error) {
 						if (error.faultString) {
 							const { message } = stripError(error.faultString);
-							reject(message);
+							console.log(message);
+							reject({ message, code: error.faultCode });
 							return;
 						}
+						console.log(error);
 						reject(error);
 						return;
 					}

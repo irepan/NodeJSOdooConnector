@@ -1,6 +1,8 @@
 const Helper = require('../helpers/Helper');
 const Odoo = require('./Odoo');
 
+const tokensModel = 'res.users.tokens';
+
 const loginUser = (email, password) => {
 	return new Promise(function(resolve, reject) {
 		if (!email || !password) {
@@ -14,6 +16,15 @@ const loginUser = (email, password) => {
 		const odoo = Odoo.getOdooConnector({ email, password });
 		odoo.connect(err => {
 			if (err) {
+				if (
+					err.message.toString() ===
+					'No UID returned from authentication.'
+				) {
+					reject({
+						error: 'User or password are incorrect'
+					});
+					return;
+				}
 				reject({ error: err.message });
 				return;
 			}
@@ -33,16 +44,11 @@ const loginUser = (email, password) => {
 					}
 					if (!value[0] || !value[0].id) {
 						reject({
-							error: 'Usuario no encontrado en la base de datos'
+							error: 'User not found in DB'
 						});
 						return;
 					}
 					const id = value[0].id;
-					/* 					const token = Odoo.tokenGenerator(id, email);
-					if (!token) {
-						reject({ error: 'Error al crear token' });
-						return;
-					} */
 					resolve({ odooId: id, email });
 					return;
 				}
@@ -145,7 +151,6 @@ const findUserById = function(id) {
 					reject('User not found');
 					return;
 				}
-				console.log('findUserById', value[0]);
 				resolve({ id: value[0].id, email: value[0].login });
 			})
 			.catch(error => {
@@ -268,11 +273,148 @@ const validatePasswordResetToken = function(token) {
 	});
 };
 
+const changePassword = function(id, password) {
+	return new Promise(async (resolve, reject) => {
+		const findUser = findUserById(id)
+			.then(user => {
+				if (!user) {
+					return { error: 'User with that ID was not found.' };
+				}
+				return { user, password };
+			})
+			.catch(error => {
+				reject('User with that ID was not found.');
+				return { error };
+			});
+		const modifyPassword = result => {
+			if (!result) {
+				return null;
+			}
+			console.log(result);
+			const {
+				user: { email },
+				password,
+				error
+			} = result;
+			if (error) {
+				return error;
+			}
+			if (!password) {
+				return { error: 'Password was not provided.' };
+			}
+			const params = [];
+			params.push([id]);
+			params.push({ password: password });
+			return Odoo.execute_kw('res.users', 'write', [params])
+				.then(() => {
+					return { email };
+				})
+				.catch(error => {
+					return { error };
+				});
+		};
+		const removeTokens = result => {
+			if (!result) {
+				reject('There was a problem updating the password.');
+				return null;
+			}
+			const { error, email } = result;
+			if (error) {
+				reject(error);
+				return error;
+			}
+			return removeExistingUserTokens(email);
+		};
+		findUser
+			.then(modifyPassword)
+			.then(removeTokens)
+			.then(result => {
+				if (!result) {
+					reject('There was a problem updating password.');
+				}
+				resolve('OK');
+			})
+			.catch(error => {
+				reject(error);
+			});
+	});
+};
+
+const verifyUserTokenModel = function() {
+	return new Promise(async (resolve, reject) => {
+		await Odoo.execute_kw(tokensModel, 'fields_get', [
+			[],
+			{
+				attributes: ['string', 'help', 'type']
+			}
+		])
+			.then(values => {
+				resolve(values);
+			})
+			.catch(error => {
+				console.log('verifyUserTokenModel', error);
+				if (error.faultString) {
+					reject(error.faultString);
+					return;
+				}
+				reject(error);
+			});
+	});
+};
+
+const createUserTokenModel = function() {
+	const verifyModel = verifyUserTokenModel()
+		.then(currentFields => {
+			const fields = [];
+			if (!currentFields.token) {
+				fields.push('token');
+			}
+			if (!currentFields.mail) {
+				fields.push('mail');
+			}
+			if (!currentFields.expires) {
+				fields.push('expires');
+			}
+			return { create: false, fields };
+		})
+		.catch(error => {
+			const { code } = error;
+			if (code && code === 2) {
+				return { create: true, fields: ['token', 'mail', 'expires'] };
+			}
+		});
+	const createTokenModel = instructions => {
+		if (!instructions) {
+			return;
+		}
+		const { create, fields} = instructions;
+		if (!create && fields.length===0) {
+			return {id:null, fields};
+		}
+		return Odoo.execute_kw('ir.model', 'create', [
+				{
+					name: 'Reset Password Tokens Model',
+					model: 'tokensModel',
+					state: 'manual'
+				}
+			])
+			.then(id => {
+				return {id, fields}
+			})
+			.catch(error => {
+				return {error};
+			});
+		};
+	const createFields = 
+};
+
 module.exports = {
 	loginUser,
 	createUser,
 	findUserById,
 	findUserByEmail,
 	generatePasswordResetToken,
-	validatePasswordResetToken
+	validatePasswordResetToken,
+	changePassword,
+	verifyUserTokenModel
 };
