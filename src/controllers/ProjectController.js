@@ -310,8 +310,6 @@ const getInfo = (table, ids) => {
 					table.strip.map(column => {
 						stripObjectId(project, column);
 					});
-					/* 					stripObjectId(project, 'company_id');
-				stripObjectId(project, 'user_id'); */
 				});
 				resolve(projects);
 			})
