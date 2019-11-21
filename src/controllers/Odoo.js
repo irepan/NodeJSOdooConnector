@@ -98,6 +98,26 @@ class OdooSingleton {
 			});
 		});
 	}
+	readRecords(model, params = []) {
+		return this.execute_kw(model, 'read', [params]);
+	}
+
+	searchRecords(model, query, starts = 0, limit = 10) {
+		return new Promise((resolve, reject) => {
+			const params = [];
+			params.push(query);
+			params.push(starts);
+			params.push(limit);
+			this.execute_kw(model, 'search', [params])
+				.then(values => {
+					resolve(values);
+				})
+				.catch(error => {
+					reject(error);
+				});
+		});
+	}
+
 	getOdooConnector({ email: username, password }) {
 		if (!this.valid) {
 			throw 'Odoo needs to be initialized using init method';

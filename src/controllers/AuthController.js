@@ -345,7 +345,7 @@ const verifyUserTokenModel = function() {
 		await Odoo.execute_kw(tokensModel, 'fields_get', [
 			[],
 			{
-				attributes: ['string', 'help', 'type']
+				attributes: ['string', 'help', 'type', 'state', 'required']
 			}
 		])
 			.then(values => {
@@ -387,25 +387,64 @@ const createUserTokenModel = function() {
 		if (!instructions) {
 			return;
 		}
-		const { create, fields} = instructions;
-		if (!create && fields.length===0) {
-			return {id:null, fields};
+		const { create, fields } = instructions;
+		if (!create && fields.length === 0) {
+			return { id: null, fields };
 		}
-		return Odoo.execute_kw('ir.model', 'create', [
-				{
-					name: 'Reset Password Tokens Model',
-					model: 'tokensModel',
-					state: 'manual'
-				}
-			])
-			.then(id => {
-				return {id, fields}
-			})
-			.catch(error => {
-				return {error};
+		if (create) {
+			return Odoo.execute_kw(
+				'ir.model',
+				'create'[
+					[
+						{
+							model: 'res.users.tokens',
+							state: 'base',
+							name: 'Users - Tokens'
+						}
+					]
+				]
+			);
+		} else {
+			const params = [];
+			params.push([['model', '=', tokensModel]]);
+			params.push(['id', 'model', 'state', 'name']);
+			params.push(0);
+			params.push(1);
+			return Odoo.execute_kw('ir.model', 'search_read', [params])
+				.then(models => {
+					if (!models) {
+						return { error: 'Model was not found' };
+					}
+					return { id: models[0].id, fields };
+				})
+				.catch(error => {
+					return { error };
+				});
+		}
+	};
+	const createFields = ({ id, fields, error }) => {
+		if (error) {
+			return { error };
+		}
+		const params = [];
+		fields.map(field => {
+			params.push({
+				model_id: id,
+				name: field,
+				ttype: field === 'expires' ? 'datetime' : 'char',
+				required: false,
+				state: 'base'
 			});
-		};
-	const createFields = 
+			console.log(field);
+		});
+		return Odoo.execute_kw('ir.model.fields', 'create', [[params]]);
+	};
+	return verifyModel
+		.then(createTokenModel)
+		.then(createFields)
+		.catch(error => {
+			return { error };
+		});
 };
 
 module.exports = {
@@ -416,5 +455,6 @@ module.exports = {
 	generatePasswordResetToken,
 	validatePasswordResetToken,
 	changePassword,
-	verifyUserTokenModel
+	verifyUserTokenModel,
+	createUserTokenModel
 };
